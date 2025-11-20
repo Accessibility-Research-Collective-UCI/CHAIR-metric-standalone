@@ -14,11 +14,12 @@ import os
 import sys
 import nltk
 import json
-from pattern.en import singularize
 import argparse
-import tqdm
 import pickle
 from collections import defaultdict
+from nltk.stem import WordNetLemmatizer
+
+lemmatizer = WordNetLemmatizer()
 
 
 # copied from: https://github.com/LisaAnne/Hallucination/blob/master/data/synonyms.txt
@@ -254,7 +255,7 @@ class CHAIR(object):
 
         # standard preprocessing
         words = nltk.word_tokenize(caption.lower())
-        words = [singularize(w) for w in words]
+        words = [lemmatizer.lemmatize(w) for w in words]
 
         # replace double words
         i = 0
@@ -343,17 +344,52 @@ class CHAIR(object):
         for imid in self.imid_to_objects:
             self.imid_to_objects[imid] = set(self.imid_to_objects[imid])
 
-    def compute_chair(self, cap_file, image_id_key, caption_key):
+    def compute_chair_from_file(self, cap_file, image_id_key, caption_key):
         """
         Given ground truth objects and generated captions, determine which sentences have hallucinated words.
+
+        Args:
+            cap_file (str): Path to the file containing the generated captions. It should be a json or jsonl file and contain an image_id key and a caption key.
+            image_id_key (str): Key in the dictionary containing the image id.
+            caption_key (str): Key in the dictionary containing the caption.
+        Returns:
+            dict: A dictionary containing the CHAIR metrics. See `compute_chair` for more details.
         """
         self._load_generated_captions_into_evaluator(
             cap_file, image_id_key, caption_key
         )
 
-        imid_to_objects = self.imid_to_objects
         caps = self.caps
         eval_imids = self.eval_imids
+
+        return self.compute_chair(caps, eval_imids)
+
+    def compute_chair(
+        self,
+        caps: list[str],
+        eval_imids: list[int],
+        compact_output: bool = False,
+    ):
+        """
+        Compute CHAIR metrics from a list of captions and a list of image ids.
+
+        Args:
+            caps (list[str]): List of captions.
+            imid_to_objects (dict[int, set[str]]): Dictionary mapping image ids to the set of objects in the image.
+            eval_imids (list[int]): List of image ids to evaluate.
+            compact_output (bool): Whether to return a compact output, with words removed.
+
+        Returns:
+            dict: A dictionary containing the CHAIR metrics.
+                "CHAIRs": float: The CHAIR-s metric.
+                "CHAIRi": float: The CHAIR-i metric.
+                "Recall": float: The Recall metric.
+                "sentences": list[dict]: A list of dictionaries containing the metrics for each sentence.
+                    "image_id": int: The image id.
+                    "caption": str: The caption.
+                    "mscoco_hallucinated_words": list[tuple[str, str]]: A list of tuples containing the hallucinated words and their corresponding node words.
+        """
+        imid_to_objects = self.imid_to_objects
 
         num_caps = 0.0
         num_hallucinated_caps = 0.0
@@ -366,7 +402,8 @@ class CHAIR(object):
 
         output = {"sentences": []}
 
-        for i in tqdm.trange(len(caps)):
+        # for i in tqdm.trange(len(caps)):
+        for i in range(len(caps)):
             cap: str = caps[i]
             imid: int = eval_imids[i]
 
@@ -381,6 +418,7 @@ class CHAIR(object):
                 "mscoco_gt_words": list(gt_objects),
                 "mscoco_generated_words": list(node_words),
                 "hallucination_idxs": [],
+                "recall_gt_objects": [],
                 "words": raw_words,
             }
 
@@ -401,6 +439,7 @@ class CHAIR(object):
                     hallucinated = True
                 else:
                     recall_gt_objects.add(node_word)
+            cap_dict["recall_gt_objects"] = list(recall_gt_objects)
 
             # count hallucinated caps
             num_caps += 1
@@ -415,21 +454,31 @@ class CHAIR(object):
             cap_dict["metrics"]["CHAIRi"] = 0.0
             cap_dict["metrics"]["Recall"] = 0.0
 
-            if len(words) > 0:
+            total_words = len(words)
+            if total_words > 0:
                 cap_dict["metrics"]["CHAIRi"] = len(
                     cap_dict["mscoco_hallucinated_words"]
-                ) / float(len(words))
+                ) / float(total_words)
 
             # add
-            if len(gt_objects) > 0:
-                cap_dict["metrics"]["Recall"] = len(recall_gt_objects) / len(gt_objects)
+            total_gt_objects = len(gt_objects)
+            if total_gt_objects > 0:
+                cap_dict["metrics"]["Recall"] = (
+                    len(recall_gt_objects) / total_gt_objects
+                )
+
+            # remove words from cap_dict if compact_output is True
+            if compact_output:
+                cap_dict.pop("words")
 
             output["sentences"].append(cap_dict)
 
-        chair_s = num_hallucinated_caps / num_caps
-        chair_i = hallucinated_word_count / coco_word_count
+        chair_s = num_hallucinated_caps / num_caps if num_caps > 0 else 0
+        chair_i = (
+            hallucinated_word_count / coco_word_count if coco_word_count > 0 else 0
+        )
         # add
-        recall = num_recall_gt_objects / num_gt_objects
+        recall = num_recall_gt_objects / num_gt_objects if num_gt_objects > 0 else 0
 
         output["overall_metrics"] = {
             "CHAIRs": chair_s,
@@ -441,6 +490,19 @@ class CHAIR(object):
 
 
 def load_generated_captions(cap_file, image_id_key: str, caption_key: str):
+    """Load generated captions from a file.
+
+    Args:
+        cap_file (str): Path to the file containing the generated captions.
+        image_id_key (str): Key in the dictionary containing the image id.
+        caption_key (str): Key in the dictionary containing the caption.
+
+    Raises:
+        ValueError: If the extension of the file is not supported.
+
+    Returns:
+        tuple: A tuple containing the list of captions and the list of image ids. The length of the list of captions and the list of image ids should be the same.
+    """
     # Read in captions
     # it should be list of dict
     ext = os.path.splitext(cap_file)[-1]
@@ -527,7 +589,7 @@ if __name__ == "__main__":
         pickle.dump(evaluator, open(args.cache, "wb"))
         print(f"cached evaluator to: {args.cache}")
 
-    cap_dict = evaluator.compute_chair(
+    cap_dict = evaluator.compute_chair_from_file(
         args.cap_file, args.image_id_key, args.caption_key
     )
 
