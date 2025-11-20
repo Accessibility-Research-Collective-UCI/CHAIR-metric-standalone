@@ -1,8 +1,8 @@
-# CHAIR 
+# CHAIR
 
 CHAIR metric is a rule-based metric for evaluating object hallucination in caption generation.
 
-I modified the original code, the original implementation CHAIR can be found at https://github.com/LisaAnne/Hallucination/blob/master/utils/chair.py 
+I modified the original code, the original implementation CHAIR can be found at <https://github.com/LisaAnne/Hallucination/blob/master/utils/chair.py>
 
 I did NOT changing its calculation to keep consistency.
 
@@ -10,9 +10,8 @@ Especially, i added a new metric `Recall` to calculate the percentage of recalle
 
 ## ⚠️ Important Note
 
-- The `hallucination_idxs` field of the output of the CHAIR evaluator is NOT correct when the caption have COCO double words (https://github.com/LisaAnne/Hallucination/issues/4). This problem may also exist in the original CHAIR repo and does not affect the calculation of CHAIR. If this field is necessary for your use case, please consider fixing it.
+- The `hallucination_idxs` field of the output of the CHAIR evaluator is NOT correct when the caption have COCO double words (<https://github.com/LisaAnne/Hallucination/issues/4>). This problem may also exist in the original CHAIR repo and does not affect the calculation of CHAIR. If this field is necessary for your use case, please consider fixing it.
 - There are two extra newlines at the beginning and the end of the `synonyms_txt` variable in `chair.py` that should not be present. This introduces an empty string element in both `inverse_synonym_dict` and `mscoco_objects`. This should not affect the calculation of CHAIR, because `nltk.word_tokenize` results and `id_to_name[annotation['category_id']]` should not produce empty strings. If this issue affects your use case, you can fix it and rebuild the cache.
-
 
 ## Modifications
 
@@ -22,12 +21,11 @@ Especially, i added a new metric `Recall` to calculate the percentage of recalle
 4. add new metric Recall, which represents the node words(i.e. lemmas of objects) coverage overall.
 5. add pickle cache mechanism to make it fast for repetitive evaluations.
 
-
 ## Usage
 
 ### Install Dependencies
 
-```
+```txt
 pattern
 nltk
 tqdm
@@ -37,10 +35,9 @@ tqdm
 
 I aleady serilized the inited CHAIR evaluator object for coco into a pickle, you can use it by setting `--cache`, see #Example Run.
 
-
 Or if you want to built CHAIR evaluator from scratch, do following steps.
 
-Put these files into `coco_annotations` dir first. Download from http://images.cocodataset.org/annotations/annotations_trainval2014.zip 
+Put these files into `coco_annotations` dir first. Download from <http://images.cocodataset.org/annotations/annotations_trainval2014.zip>
 
 - captions_train2014.json
 - captions_val2014.json
@@ -61,7 +58,8 @@ python chair.py \
 ```
 
 outputs:
-```
+
+```txt
 CHAIRs    : 0.0
 CHAIRi    : 0.0
 Recall    : 85.7
@@ -88,7 +86,7 @@ parser.add_argument("--save_path", type=str, default="",
 
 ## Disclaimer
 
-Since the original implementation is written in Python2 and needs intermediate results to run, i have not test the original implementation yet. 
+Since the original implementation is written in Python2 and needs intermediate results to run, i have not test the original implementation yet.
 
 I've tried my best to keep the consistency so i guess it could reproduce CHAIR results comparing to the original code, but there is no warrant.
 
