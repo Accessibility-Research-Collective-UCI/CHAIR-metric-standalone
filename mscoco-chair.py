@@ -365,7 +365,8 @@ def simulate_thresholding(chair_score: float, vlm: str, chair_type: str = "CHAIR
         all_thresholds, chair_score, atomic_sim_scores, vlm, chair_type
     )
     print(
-        f"{vlm} {chair_type}: {avg_chair:.04f} <= {chair_score:.04f} at threshold {thres:.04f} (min threshold={all_thresholds[0]:.04f})"
+        f"{vlm} {chair_type}: {avg_chair:.04f} <= {chair_score:.04f} at threshold {thres:.04f} (min threshold={all_thresholds[0]:.04f})",
+        flush=True
     )
     # we want the matching threshold and pct remaining
     return thres, pct_remaining
@@ -382,7 +383,6 @@ def save_scores_and_simulation(chair_score_types, base_vlms, baselines):
         chair_scores[chair_type] = {}
         simulations[chair_type] = {}
 
-        out_str += f"{chair_type}\n"
         for vlm in tqdm(base_vlms, desc="Base VLM", leave=False):
             # base chair for comparison
             base_chair = get_vlm_chair(vlm, chair_type)
